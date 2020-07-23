@@ -16365,11 +16365,7 @@ bool GenTree::DefinesLocalAddr(Compiler* comp, unsigned width, GenTreeLclVarComm
             *pLclVarTree                    = addrArgLcl;
             if (pIsEntire != nullptr)
             {
-                unsigned lclOffset = 0;
-                if (addrArg->OperIsLocalField())
-                {
-                    lclOffset = addrArg->AsLclFld()->GetLclOffs();
-                }
+                unsigned lclOffset = addrArgLcl->GetLclOffs();
 
                 if (lclOffset != 0)
                 {
@@ -17475,7 +17471,9 @@ CORINFO_CLASS_HANDLE Compiler::gtGetStructHandleIfPresent(GenTree* tree)
                             {
                                 CORINFO_FIELD_HANDLE fieldHnd = fieldSeq->m_fieldHnd;
                                 CorInfoType fieldCorType      = info.compCompHnd->getFieldType(fieldHnd, &structHnd);
-                                assert(fieldCorType == CORINFO_TYPE_VALUECLASS);
+                                // With unsafe code and type casts
+                                // this can return a primitive type and have nullptr for structHnd
+                                // see runtime/issues/38541
                             }
                         }
                     }
@@ -19348,6 +19346,25 @@ regNumber GenTree::ExtractTempReg(regMaskTP mask /* = (regMaskTP)-1 */)
     regMaskTP tempRegMask = genFindLowestBit(availableSet);
     gtRsvdRegs &= ~tempRegMask;
     return genRegNumFromMask(tempRegMask);
+}
+
+//------------------------------------------------------------------------
+// GetLclOffs: if `this` is a field or a field address it returns offset
+// of the field inside the struct, for not a field it returns 0.
+//
+// Return Value:
+//    The offset value.
+//
+uint16_t GenTreeLclVarCommon::GetLclOffs() const
+{
+    if (OperIsLocalField())
+    {
+        return AsLclFld()->GetLclOffs();
+    }
+    else
+    {
+        return 0;
+    }
 }
 
 #ifdef TARGET_ARM
